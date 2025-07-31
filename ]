@@ -1,0 +1,56 @@
+package main
+
+import (
+	"net/http"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// when user with seesion visits /dashborad
+// it should showall the urls he created, then when urls expired or about to expires and stuffs
+// lets start a basic one for this then can handle complicated stuffs
+
+// so how to start
+//
+//first figure out the session thing
+//then when user is logged in and visits /dashboard it should send the json response of url data
+//may be cvreate a custom url model for this
+//	url
+//	shorturl
+//	created
+//	clicks
+//	expired or out
+//	when expires
+
+type ShowUserUrldata struct {
+	LongUrl              string
+	ShortUrl             string
+	Clicks               int
+	TimeBeforeExpiration time.Time
+	Expired              bool
+}
+
+func ShowUserDashBoard(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
+	session, _ := store.Get(r, "atomicurl")
+	//check if the user is authenticated
+	if session.Values["authenticated"] != true {
+		writeJson(w, http.StatusForbidden, apiError{Err: "Please log in to view your dashboard."})
+		return
+	}
+
+	// Get the user id
+	id := session.Values["userid"]
+	if id == 0 {
+		writeJson(w, http.StatusBadRequest, apiError{Err: "Id was 0"})
+	}
+	// Fetch all the urls user created even expired one
+	var user User
+	res := db.Where("user_id=?", id).Find(&user)
+	if res.Error != nil {
+		writeJson(w, http.StatusInternalServerError, apiError{Err: res.Error.Error()})
+		return
+	}
+
+	writeJson(w, http.StatusOK, apiSuccess{Message: user.Urls})
+}
