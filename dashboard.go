@@ -70,5 +70,5 @@ func ShowUserDashBoard(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		}
 		UrlsData = append(UrlsData, urldata)
 	}
-	writeJson(w, http.StatusOK, apiSuccess{Message: UrlsData})
+	writeJson(w, http.StatusOK, apiSuccess{Success: UrlsData})
 }

@@ -50,5 +50,5 @@ func RemakeExpiredLinks(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 			reFetch = append(reFetch, v)
 		}
 	}
-	writeJson(w, 200, apiSuccess{Message: "All links have been reset to new expiration time."})
+	writeJson(w, 200, apiSuccess{Success: "All links have been reset to new expiration time."})
 }

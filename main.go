@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 )
 
@@ -25,9 +26,11 @@ func main() {
 		Login(w, r, db)
 	}).Methods("POST")
 
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	rateLimiter := RateLimiterMiddleware(rate.Limit(5), 10)
+
+	r.Handle("/create", rateLimiter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleUserUrlsSumbmission(w, r, db)
-	})
+	})))
 
 	r.HandleFunc("/logout", Logout)
 	r.HandleFunc("/greetme", func(w http.ResponseWriter, r *http.Request) {

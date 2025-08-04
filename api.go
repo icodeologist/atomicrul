@@ -10,18 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
-type Request struct {
-	LongUrl      string `json:"url"`
-	CustomDomain string `json:"custom_domain"`
-}
-
 type apiError struct {
 	Err string `json:"error"`
 }
 
 type apiSuccess struct {
 	Short_url string `json:"short_url"`
-	Message   any    `json:"message"`
+	Success   any    `json:"message"`
 }
 
 func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
@@ -112,14 +107,4 @@ func writeJson(w http.ResponseWriter, statusCode int, v any) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(v)
-}
-
-func ReverseString(s string) string {
-	r := []rune(s)
-	n := len(r)
-	for i := 0; i < n/2; i++ {
-		fmt.Println(string(n - 1 - i))
-		r[i], r[n-1-i] = r[n-1-i], r[i]
-	}
-	return string(r)
 }

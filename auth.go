@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var retry = 0
 var store = sessions.NewCookieStore([]byte(os.Getenv("SECRETKEY")))
 
 func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
@@ -62,7 +61,7 @@ func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 			return
 		}
 
-		writeJson(w, http.StatusOK, apiSuccess{Message: fmt.Sprintf("User created %v\n", user)})
+		writeJson(w, http.StatusOK, apiSuccess{Success: fmt.Sprintf("User created %v\n", user)})
 	} else {
 		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Only post allowed"})
 	}
@@ -83,26 +82,20 @@ func Login(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	// check for password matching
 	if err := bcrypt.CompareHashAndPassword([]byte(userCheck.Password), []byte(password)); err != nil {
 		writeJson(w, http.StatusNotFound, apiError{Err: fmt.Sprintf("haa Try again you dum fuk")})
-		retry++
-		if retry == 3 {
-			writeJson(w, http.StatusNotFound, apiError{Err: fmt.Sprintf("Hahhahahha get banned. You mom's third cat has a better memory. You re ta hard")})
-			return
-		}
 		return
 	}
-	retry = 0
 	session, _ := store.Get(r, "atomicurl")
 	session.Values["authenticated"] = true
 	session.Values["userid"] = userCheck.ID
 	session.Save(r, w)
-	writeJson(w, http.StatusOK, apiSuccess{Message: "Successfully logged in."})
+	writeJson(w, http.StatusOK, apiSuccess{Success: "Successfully logged in."})
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "atomicurl")
 	session.Values["authenticated"] = false
 	session.Save(r, w)
-	writeJson(w, http.StatusOK, apiSuccess{Message: "Successfully logged out."})
+	writeJson(w, http.StatusOK, apiSuccess{Success: "Successfully logged out."})
 }
 
 func GreetIn(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
@@ -116,6 +109,6 @@ func GreetIn(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	var user User
 	db.Where("id=?", id).First(&user)
 	fmt.Println(user)
-	writeJson(w, http.StatusOK, apiSuccess{Message: fmt.Sprintf("user id : %v\n", id)})
+	writeJson(w, http.StatusOK, apiSuccess{Success: fmt.Sprintf("user id : %v\n", id)})
 
 }
