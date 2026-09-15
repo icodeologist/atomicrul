@@ -1,9 +1,9 @@
 package main
 
 import (
-	"log"
 	"net"
 	"net/http"
+	"sync"
 
 	"golang.org/x/time/rate"
 )
@@ -11,27 +11,32 @@ import (
 func getIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		log.Printf("Could not fetch the ip : %v\n", err.Error())
+		return r.RemoteAddr
 	}
 	return host
 }
 
-var ipLimiterMap = make(map[string]*rate.Limiter)
-
 func RateLimiterMiddleware(limit rate.Limit, burst int) func(http.Handler) http.Handler {
+	var mu sync.Mutex
+	limiters := make(map[string]*rate.Limiter)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// fetch ip
 			ip := getIP(r)
-			limiter, exists := ipLimiterMap[ip]
+
+			mu.Lock()
+			limiter, exists := limiters[ip]
 			if !exists {
-				// create
 				limiter = rate.NewLimiter(limit, burst)
-				ipLimiterMap[ip] = limiter
+				limiters[ip] = limiter
 			}
+			mu.Unlock()
+
 			if !limiter.Allow() {
-				writeJson(w, 429, apiError{Err: "Too many requests."})
+				writeJson(w, http.StatusTooManyRequests, apiError{Err: "Too many requests."})
+				return
 			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
