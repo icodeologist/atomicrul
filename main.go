@@ -34,25 +34,25 @@ func main() {
 
 	r.Handle("/create", rateLimiter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleUserUrlsSumbmission(w, r, db)
-	})))
+	}))).Methods(http.MethodPost)
 
-	r.HandleFunc("/logout", Logout)
+	r.HandleFunc("/logout", Logout).Methods(http.MethodPost)
 	r.HandleFunc("/greetme", func(w http.ResponseWriter, r *http.Request) {
 		GreetIn(w, r, db)
-	})
+	}).Methods(http.MethodGet)
 
 	r.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		ShowUserDashBoard(w, r, db)
-	})
+	}).Methods(http.MethodGet)
 
 	r.HandleFunc("/remake_links", func(w http.ResponseWriter, r *http.Request) {
 		RemakeExpiredLinks(w, r, db)
-	})
+	}).Methods(http.MethodPost)
 	r.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
 		HandleRedirectionOfShortUrlToLongUrl(w, r, db)
-	})
+	}).Methods(http.MethodGet)
 
-	fmt.Println("Server running in port:8000")
+	fmt.Println("Server running on port 3000")
 	err = http.ListenAndServe(":3000", r)
 	if err != nil {
 		fmt.Println(err)
