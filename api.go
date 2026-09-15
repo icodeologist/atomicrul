@@ -25,7 +25,10 @@ func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.
 		return
 	}
 
-	session, _ := store.Get(r, "atomicurl")
+	session, ok := getSession(w, r)
+	if !ok {
+		return
+	}
 	// check for authentication
 	if session.Values["authenticated"] != true {
 		writeJson(w, http.StatusUnauthorized, apiError{Err: "User is not authorized.Please login. continue."})

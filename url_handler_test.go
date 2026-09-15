@@ -8,12 +8,16 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	if err := ConfigureSessionStore("test-secret-key-that-is-at-least-32-bytes", false); err != nil {
+		t.Fatalf("Failed to configure test sessions: %v", err)
+	}
+
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to connect to test db : %v", err.Error())
@@ -22,8 +26,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	db.AutoMigrate(&Url{})
 	return db
 }
-
-var testStore = sessions.NewCookieStore([]byte("test-atomicurl"))
 
 func TestHandleUserUrlsSubmission_Success(t *testing.T) {
 	db := setupTestDB(t)
@@ -35,7 +37,7 @@ func TestHandleUserUrlsSubmission_Success(t *testing.T) {
 
 	// Create a fake session
 	rr := httptest.NewRecorder()
-	session, _ := testStore.Get(req, "atomicurl")
+	session, _ := store.Get(req, "atomicurl")
 	session.Values["authenticated"] = true
 	session.Values["userid"] = uint(1)
 	session.Save(req, rr)

@@ -32,7 +32,10 @@ type ShowUserUrldata struct {
 }
 
 func ShowUserDashBoard(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	session, _ := store.Get(r, "atomicurl")
+	session, ok := getSession(w, r)
+	if !ok {
+		return
+	}
 	//check if the user is authenticated
 	if session.Values["authenticated"] != true {
 		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in to view your dashboard."})

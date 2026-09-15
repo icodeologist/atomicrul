@@ -11,7 +11,10 @@ import (
 // then remake them and update the database
 
 func RemakeExpiredLinks(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	session, _ := store.Get(r, "atomicurl")
+	session, ok := getSession(w, r)
+	if !ok {
+		return
+	}
 	if session.Values["authenticated"] != true {
 		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
 		return

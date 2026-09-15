@@ -7,7 +7,10 @@ import (
 )
 
 func FetchAllUrls(w http.ResponseWriter, r *http.Request, db *gorm.DB) []Url {
-	session, _ := store.Get(r, "atomicrul")
+	session, ok := getSession(w, r)
+	if !ok {
+		return nil
+	}
 
 	if session.Values["authenticated"] != true {
 		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})

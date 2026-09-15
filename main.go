@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/time/rate"
@@ -11,7 +12,10 @@ import (
 )
 
 func main() {
-	//FIXME: add better error handling
+	if err := ConfigureSessionStore(os.Getenv("SECRETKEY"), os.Getenv("APP_ENV") == "production"); err != nil {
+		log.Fatal(err)
+	}
+
 	db, err := SetUpDb()
 	if err != nil {
 		log.Fatal(err.Error())

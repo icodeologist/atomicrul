@@ -1,9 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/bcrypt"
@@ -11,7 +11,37 @@ import (
 	"gorm.io/gorm"
 )
 
-var store = sessions.NewCookieStore([]byte(os.Getenv("SECRETKEY")))
+var store *sessions.CookieStore
+
+func ConfigureSessionStore(secret string, secure bool) error {
+	if len(secret) < 32 {
+		return errors.New("SECRETKEY must be at least 32 characters long")
+	}
+
+	store = sessions.NewCookieStore([]byte(secret))
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   7 * 24 * 60 * 60,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return nil
+}
+
+func getSession(w http.ResponseWriter, r *http.Request) (*sessions.Session, bool) {
+	if store == nil {
+		writeJson(w, http.StatusInternalServerError, apiError{Err: "Session service is not configured."})
+		return nil, false
+	}
+
+	session, err := store.Get(r, "atomicurl")
+	if err != nil {
+		writeJson(w, http.StatusBadRequest, apiError{Err: "Invalid session cookie."})
+		return nil, false
+	}
+	return session, true
+}
 
 func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	if r.Method == http.MethodPost {
@@ -20,9 +50,9 @@ func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		email := r.FormValue("email")
 		password := r.FormValue("password")
 
-		if len(username) <= 5 || len(password) < 8 {
+		if len(username) < 5 || len(password) < 8 {
 			writeJson(w, http.StatusBadRequest, apiError{
-				Err: "Username should atleast be 5 characters long. Passwords must be 8 or highe.",
+				Err: "Username must be at least 5 characters and password must be at least 8 characters.",
 			})
 			return
 		}
@@ -61,7 +91,7 @@ func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 			return
 		}
 
-		writeJson(w, http.StatusOK, apiSuccess{Success: fmt.Sprintf("User created %v\n", user)})
+		writeJson(w, http.StatusCreated, apiSuccess{Success: "Account created successfully."})
 	} else {
 		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Only post allowed"})
 	}
@@ -76,30 +106,46 @@ func Login(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	var userCheck User
 	db.Where("user_name=?", username).First(&userCheck)
 	if userCheck.ID == 0 {
-		writeJson(w, http.StatusNotFound, apiError{Err: fmt.Sprintf("User does not exists : %v\n", username)})
+		writeJson(w, http.StatusUnauthorized, apiError{Err: "Invalid username or password."})
 		return
 	}
 	// check for password matching
 	if err := bcrypt.CompareHashAndPassword([]byte(userCheck.Password), []byte(password)); err != nil {
-		writeJson(w, http.StatusNotFound, apiError{Err: fmt.Sprintf("haa Try again you dum fuk")})
+		writeJson(w, http.StatusUnauthorized, apiError{Err: "Invalid username or password."})
 		return
 	}
-	session, _ := store.Get(r, "atomicurl")
+	session, ok := getSession(w, r)
+	if !ok {
+		return
+	}
 	session.Values["authenticated"] = true
 	session.Values["userid"] = userCheck.ID
-	session.Save(r, w)
+	if err := session.Save(r, w); err != nil {
+		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not start session."})
+		return
+	}
 	writeJson(w, http.StatusOK, apiSuccess{Success: "Successfully logged in."})
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	session, _ := store.Get(r, "atomicurl")
-	session.Values["authenticated"] = false
-	session.Save(r, w)
+	session, ok := getSession(w, r)
+	if !ok {
+		return
+	}
+	session.Values = nil
+	session.Options.MaxAge = -1
+	if err := session.Save(r, w); err != nil {
+		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not end session."})
+		return
+	}
 	writeJson(w, http.StatusOK, apiSuccess{Success: "Successfully logged out."})
 }
 
 func GreetIn(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	session, _ := store.Get(r, "atomicurl")
+	session, ok := getSession(w, r)
+	if !ok {
+		return
+	}
 	// get the user id
 	if session.Values["authenticated"] != true {
 		writeJson(w, http.StatusForbidden, apiError{Err: "You need to login in."})
@@ -108,7 +154,6 @@ func GreetIn(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	id := session.Values["userid"]
 	var user User
 	db.Where("id=?", id).First(&user)
-	fmt.Println(user)
 	writeJson(w, http.StatusOK, apiSuccess{Success: fmt.Sprintf("user id : %v\n", id)})
 
 }
