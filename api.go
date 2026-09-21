@@ -71,7 +71,6 @@ func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.
 	url.ShortLinkCreatedTime = time.Now()
 	url.ShortLink = url.Domain + "/" + url.ShortID
 
-	url.ExpirationTime = time.Now().Add(10 * time.Minute)
 	// add the domain/shortid and redirect it to main url
 
 	db.Save(&url)
@@ -132,20 +131,15 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if time.Now().After(url.ExpirationTime) {
-		writeJson(w, http.StatusGone, apiError{Err: "Your link has expired."})
-		return
-	}
-
 	clickResult := db.Model(&Url{}).
-		Where("id = ? AND expiration_time > ?", url.ID, time.Now()).
+		Where("id = ?", url.ID).
 		UpdateColumn("clicks", gorm.Expr("clicks + ?", 1))
 	if clickResult.Error != nil {
 		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not record link click."})
 		return
 	}
 	if clickResult.RowsAffected == 0 {
-		writeJson(w, http.StatusGone, apiError{Err: "Your link has expired."})
+		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
 		return
 	}
 

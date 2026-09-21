@@ -27,9 +27,11 @@ type Url struct {
 	ShortLink            string
 	Domain               string `gorm:"default:'http://localhost:3000'"`
 	ShortLinkCreatedTime time.Time
-	ExpirationTime       time.Time
-	UserID               uint
-	Clicks               int
+	// ExpirationTime is retained for compatibility with legacy Url rows.
+	// Permanent Link records do not use expiry behavior.
+	ExpirationTime time.Time
+	UserID         uint
+	Clicks         int
 }
 
 type Link struct {
