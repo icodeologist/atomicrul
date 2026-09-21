@@ -65,10 +65,9 @@ This is a single-package Go application with about a dozen source files.
 | --- | --- | --- |
 | Startup and routes | `main.go` | Connects to PostgreSQL, migrates tables, and starts on port 3000 |
 | Accounts | `auth.go` | Register, login, logout, and cookie sessions |
-| Link API | `api.go` | Creates a link, generates its code, and handles redirects |
+| Link API | `api.go`, `link_*.go` | Creates, updates, versions, rolls back, and redirects permanent links |
 | Dashboard | `dashboard.go` | Returns a user's links as JSON |
-| Expiry | `remakeExpiredLinks.go` | Extends all expired links for a user |
-| Database | `db.go`, `models.go` | GORM models for users and URLs |
+| Database | `db.go`, `models.go` | GORM models for users, legacy URLs, and permanent links |
 | Short codes | `shortner.go` | Converts database IDs to and from base 62 |
 | Traffic control | `ratelimiter.go` | Per-IP in-memory create-route limiter |
 | Tests | `url_handler_test.go`, `ratelimiter_test.go` | Basic create, redirect, and limiter coverage |
@@ -76,8 +75,10 @@ This is a single-package Go application with about a dozen source files.
 ### Data currently stored
 
 Users have a username, email, password hash, timestamps, and associated links.
-Links have a destination, generated short ID, full short URL, domain, creation
-time, expiration time, owner, and click count.
+Permanent links have a title, unique code, current destination, active state,
+owner, click count, timestamps, and append-only destination versions. Legacy
+`Url` rows remain stored for compatibility; their old expiration column is
+retained but no longer drives runtime behavior.
 
 ### Runtime configuration currently expected
 
@@ -91,8 +92,7 @@ recipe, or startup validation yet.
 - There is no frontend.
 - There are no deployment files or continuous-integration checks.
 - A compiled 17 MB development binary is committed under `tmp/runner-build`.
-- An accidental tracked source file named `]` contains an obsolete dashboard
-  implementation.
+- The obsolete tracked dashboard source file has been removed.
 - The latest commit says "Refactored and cleaned," but it removed the only HTML
   templates and left the project as an API-only prototype.
 
@@ -120,23 +120,13 @@ Dedicated tests cover secret validation, password-data leakage, and failed
 login responses. A CSRF token should still be added when browser forms are
 built.
 
-### 3. Link input and redirect correctness
+### 3. Permanent link flow — implemented
 
-- Link creation accepts any non-empty text instead of a valid `http` or `https`
-  URL.
-- Database save errors are ignored after code generation.
-- A missing link is reported as a bad request instead of not found.
-- Expired links return an unusual 406 response.
-- Click increments can be lost when several people visit at once.
-- Short IDs expose the database's simple numeric order and lack explicit unique
-  constraints.
-
-### 4. Expiry fights the product
-
-Every new link expires after ten minutes. A permanent, updateable link should
-not expire by default. Expiry can later be an optional owner choice. The current
-"remake all links" route changes data through a GET request, extends links to a
-different duration, and contains unused re-fetch logic.
+The new `Link` model validates HTTP(S) destinations, creates an initial
+`LinkVersion` transactionally, supports destination updates and rollback, and
+redirects with atomic click counting. New links do not expire. The old `Url`
+model and `/create` route remain only for non-destructive compatibility while
+existing rows are migrated explicitly.
 
 ### 5. Database and configuration reliability
 
@@ -149,18 +139,16 @@ different duration, and contains unused re-fetch logic.
 
 ### 6. API quality
 
-- Naming and response fields are inconsistent (`Url`, `Short_url`, `Sumbmission`).
-- Most JSON fields rely on Go's default capitalized names.
-- Route method restrictions are incomplete.
-- The dashboard shows an expiry clock time, not a useful date or duration.
-- Debug prints and old planning comments remain in production code.
+- The legacy `/create` handler and `Url` model still need eventual removal after
+  data migration.
+- Debug prints and old planning comments remain in some legacy code.
 
 ### 7. Test gaps
 
-The original suite only covers successful creation and successful redirect.
-There are no meaningful tests for registration, login, authorization, invalid
-input, missing/expired links, database failures, click concurrency, dashboard
-ownership, or rollback behavior.
+The suite now covers registration, login, authorization, invalid input, missing
+links, database failures, click concurrency, dashboard ownership, history, and
+rollback behavior. Explicit migration tests for converting legacy `Url` rows
+are still pending.
 
 ## Build sequence
 

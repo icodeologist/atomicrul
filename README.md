@@ -18,9 +18,13 @@ links that have already left your hands.
 ## Project status
 
 This repository currently contains an early Go API. It supports accounts,
-cookie-based login, short-link creation, redirects, click counts, temporary
-link expiry, and a JSON dashboard. It does not have a frontend or a production
-setup yet, and several parts of the API need hardening before new product work.
+cookie-based login, permanent versioned links, authenticated destination
+updates, history, rollback, redirects, click counts, and a JSON dashboard. It
+does not have a frontend or a production setup yet.
+
+New `Link` records do not expire. Legacy `Url` rows remain in the database and
+are still redirectable during migration; their historical `ExpirationTime`
+column is retained but is no longer read or written by the runtime.
 
 See [PROJECT_REVIEW.md](PROJECT_REVIEW.md) for the full codebase inventory,
 known issues, product decision, and build order.
@@ -38,9 +42,12 @@ known issues, product decision, and build order.
 | --- | --- | --- |
 | `POST` | `/register` | Create an account |
 | `POST` | `/login` | Log in and receive a session cookie |
-| `POST` | `/create` | Create a short link (login required) |
+| `POST` | `/links` | Create a permanent versioned link (login required) |
+| `PATCH` | `/links/{id}` | Update a destination and create a version (login required) |
+| `GET` | `/links/{id}/history` | View destination history (login required) |
+| `POST` | `/links/{id}/versions/{versionID}/rollback` | Roll back to a previous destination (login required) |
+| `POST` | `/create` | Legacy short-link creation route kept for compatibility |
 | `GET` | `/dashboard` | List the current user's links |
-| `GET` | `/remake_links` | Extend expired links (temporary legacy behavior) |
 | `GET` | `/{code}` | Redirect to a link's destination |
 
 The API is under active reconstruction. The route shapes and response formats
