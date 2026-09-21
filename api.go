@@ -99,6 +99,19 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 			writeJson(w, http.StatusGone, apiError{Err: "This link is inactive."})
 			return
 		}
+
+		clickResult := db.Model(&Link{}).
+			Where("id = ? AND active = ?", link.ID, true).
+			UpdateColumn("clicks", gorm.Expr("clicks + ?", 1))
+		if clickResult.Error != nil {
+			writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not record link click."})
+			return
+		}
+		if clickResult.RowsAffected == 0 {
+			writeJson(w, http.StatusGone, apiError{Err: "This link is inactive."})
+			return
+		}
+
 		http.Redirect(w, r, link.Destination, http.StatusFound)
 		return
 	}
@@ -120,6 +133,18 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 	}
 
 	if time.Now().After(url.ExpirationTime) {
+		writeJson(w, http.StatusGone, apiError{Err: "Your link has expired."})
+		return
+	}
+
+	clickResult := db.Model(&Url{}).
+		Where("id = ? AND expiration_time > ?", url.ID, time.Now()).
+		UpdateColumn("clicks", gorm.Expr("clicks + ?", 1))
+	if clickResult.Error != nil {
+		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not record link click."})
+		return
+	}
+	if clickResult.RowsAffected == 0 {
 		writeJson(w, http.StatusGone, apiError{Err: "Your link has expired."})
 		return
 	}
