@@ -31,13 +31,13 @@ func ConfigureSessionStore(secret string, secure bool) error {
 
 func getSession(w http.ResponseWriter, r *http.Request) (*sessions.Session, bool) {
 	if store == nil {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Session service is not configured."})
+		writeAPIError(w, http.StatusInternalServerError, "Session service is not configured.")
 		return nil, false
 	}
 
 	session, err := store.Get(r, "atomicurl")
 	if err != nil {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Invalid session cookie."})
+		writeAPIError(w, http.StatusBadRequest, "Invalid session cookie.")
 		return nil, false
 	}
 	return session, true
