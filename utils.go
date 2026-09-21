@@ -26,7 +26,7 @@ func FetchAllUrls(w http.ResponseWriter, r *http.Request, db *gorm.DB) []Url {
 	var urls []Url
 	res := db.Where("user_id=?", userId).Find(&urls)
 	if res.Error != nil {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: res.Error.Error()})
+		writeAPIError(w, http.StatusInternalServerError, "Could not load legacy links.")
 		return nil
 	}
 	return urls

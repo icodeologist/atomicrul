@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -17,8 +16,8 @@ type apiError struct {
 }
 
 type apiSuccess struct {
-	Short_url string `json:"short_url"`
-	Success   any    `json:"message"`
+	ShortURL string `json:"short_url"`
+	Success  any    `json:"message"`
 }
 
 func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
@@ -27,38 +26,27 @@ func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.
 		return
 	}
 
-	session, ok := getSession(w, r)
+	userID, ok := requireAuthenticatedUser(w, r)
 	if !ok {
-		return
-	}
-	// check for authentication
-	if session.Values["authenticated"] != true {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "User is not authorized.Please login. continue."})
-		return
-	}
-
-	// get the current logged in users id
-	userId := session.Values["userid"]
-	if userId == 0 {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "User is not authorized. Please login."})
 		return
 	}
 
 	longurl := r.FormValue("url")
-	if longurl == "" {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Please enter the correct url"})
+	destination, err := ValidateAndNormalizeURL(longurl)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// update the database
 	url := Url{
-		URL:    longurl,
-		UserID: userId.(uint),
+		URL:    destination,
+		UserID: userID,
 	}
 
 	result := db.Create(&url)
 	if result.Error != nil {
-		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: result.Error.Error()})
+		writeAPIError(w, http.StatusInternalServerError, "Could not create legacy link.")
 		return
 	}
 
@@ -66,22 +54,24 @@ func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.
 
 	id := url.ID
 	uniqueShortID := GenerateShortIDWithBase62Encoding(id)
-	fmt.Println("Short Id ", uniqueShortID)
 	url.ShortID = uniqueShortID
 	url.ShortLinkCreatedTime = time.Now()
 	url.ShortLink = url.Domain + "/" + url.ShortID
 
 	// add the domain/shortid and redirect it to main url
 
-	db.Save(&url)
-	writeJson(w, 200, apiSuccess{
-		Short_url: url.ShortLink,
+	if err := db.Save(&url).Error; err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Could not save legacy link.")
+		return
+	}
+	writeJson(w, http.StatusOK, apiSuccess{
+		ShortURL: url.ShortLink,
 	})
 }
 
 func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	if r.Method != http.MethodGet {
-		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Method not allowed."})
+		writeAPIError(w, http.StatusMethodNotAllowed, "Method not allowed.")
 		return
 	}
 
@@ -95,7 +85,7 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 	result := db.Where("code = ?", code).First(&link)
 	if result.Error == nil {
 		if !link.Active {
-			writeJson(w, http.StatusGone, apiError{Err: "This link is inactive."})
+			writeAPIError(w, http.StatusGone, "This link is inactive.")
 			return
 		}
 
@@ -103,11 +93,11 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 			Where("id = ? AND active = ?", link.ID, true).
 			UpdateColumn("clicks", gorm.Expr("clicks + ?", 1))
 		if clickResult.Error != nil {
-			writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not record link click."})
+			writeAPIError(w, http.StatusInternalServerError, "Could not record link click.")
 			return
 		}
 		if clickResult.RowsAffected == 0 {
-			writeJson(w, http.StatusGone, apiError{Err: "This link is inactive."})
+			writeAPIError(w, http.StatusGone, "This link is inactive.")
 			return
 		}
 
@@ -115,7 +105,7 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not look up link."})
+		writeAPIError(w, http.StatusInternalServerError, "Could not look up link.")
 		return
 	}
 
@@ -123,11 +113,11 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 	var url Url
 	result = db.Where("short_id = ?", code).First(&url)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
+		writeAPIError(w, http.StatusNotFound, "Link not found.")
 		return
 	}
 	if result.Error != nil {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not look up link."})
+		writeAPIError(w, http.StatusInternalServerError, "Could not look up link.")
 		return
 	}
 
@@ -135,11 +125,11 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 		Where("id = ?", url.ID).
 		UpdateColumn("clicks", gorm.Expr("clicks + ?", 1))
 	if clickResult.Error != nil {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not record link click."})
+		writeAPIError(w, http.StatusInternalServerError, "Could not record link click.")
 		return
 	}
 	if clickResult.RowsAffected == 0 {
-		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
+		writeAPIError(w, http.StatusNotFound, "Link not found.")
 		return
 	}
 
@@ -147,7 +137,7 @@ func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request
 }
 
 func writeJson(w http.ResponseWriter, statusCode int, v any) {
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(v)
 }

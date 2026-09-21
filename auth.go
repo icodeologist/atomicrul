@@ -75,7 +75,7 @@ func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 		}
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
-			writeJson(w, http.StatusInternalServerError, apiError{Err: fmt.Sprintf("Password Hashing error : %v\n", err.Error())})
+			writeAPIError(w, http.StatusInternalServerError, "Could not create account.")
 			return
 		}
 		//create the user
@@ -87,7 +87,7 @@ func Register(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 
 		res := db.Create(&user)
 		if res.Error != nil {
-			writeJson(w, http.StatusInternalServerError, apiError{Err: fmt.Sprintf("Error caused while creating the user %v\n", res.Error.Error())})
+			writeAPIError(w, http.StatusInternalServerError, "Could not create account.")
 			return
 		}
 
