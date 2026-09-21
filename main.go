@@ -44,6 +44,9 @@ func main() {
 	r.HandleFunc("/links/{id}/history", func(w http.ResponseWriter, r *http.Request) {
 		GetLinkHistory(w, r, db)
 	}).Methods(http.MethodGet)
+	r.HandleFunc("/links/{id}/versions/{versionID}/rollback", func(w http.ResponseWriter, r *http.Request) {
+		RollbackLink(w, r, db)
+	}).Methods(http.MethodPost)
 
 	r.HandleFunc("/logout", Logout).Methods(http.MethodPost)
 	r.HandleFunc("/greetme", func(w http.ResponseWriter, r *http.Request) {
