@@ -35,6 +35,9 @@ func main() {
 	r.Handle("/create", rateLimiter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleUserUrlsSumbmission(w, r, db)
 	}))).Methods(http.MethodPost)
+	r.HandleFunc("/links", func(w http.ResponseWriter, r *http.Request) {
+		CreateLink(w, r, db)
+	}).Methods(http.MethodPost)
 
 	r.HandleFunc("/logout", Logout).Methods(http.MethodPost)
 	r.HandleFunc("/greetme", func(w http.ResponseWriter, r *http.Request) {
