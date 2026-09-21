@@ -1,10 +1,14 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/time/rate"
@@ -12,14 +16,23 @@ import (
 )
 
 func main() {
-	if err := ConfigureSessionStore(os.Getenv("SECRETKEY"), os.Getenv("APP_ENV") == "production"); err != nil {
+	config, err := LoadConfig(os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := ConfigureSessionStore(config.SecretKey, config.AppEnv == "production"); err != nil {
 		log.Fatal(err)
 	}
 
-	db, err := SetUpDb()
+	db, err := SetUpDbWithConfig(config)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
+	defer func() {
+		if err := CloseDatabase(db); err != nil {
+			log.Printf("database cleanup failed: %v", err)
+		}
+	}()
 
 	r := mux.NewRouter()
 	r.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
@@ -61,21 +74,55 @@ func main() {
 		HandleRedirectionOfShortUrlToLongUrl(w, r, db)
 	}).Methods(http.MethodGet)
 
-	fmt.Println("Server running on port 3000")
-	err = http.ListenAndServe(":3000", r)
-	if err != nil {
-		fmt.Println(err)
+	server := &http.Server{
+		Addr:              ":" + config.HTTPPort,
+		Handler:           r,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	shutdownSignals, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	serverErrors := make(chan error, 1)
+	go func() {
+		log.Printf("server listening on %s", server.Addr)
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErrors:
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("server stopped: %v", err)
+		}
+	case <-shutdownSignals.Done():
+		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := server.Shutdown(shutdownContext); err != nil {
+			log.Printf("graceful shutdown failed: %v", err)
+		}
+		cancel()
+		<-serverErrors
 	}
 }
 
 func SetUpDb() (*gorm.DB, error) {
-	databse, err := ConnectToDatabase()
+	config, err := LoadConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return SetUpDbWithConfig(config)
+}
+
+func SetUpDbWithConfig(config AppConfig) (*gorm.DB, error) {
+	databse, err := ConnectToDatabaseWithConfig(config)
 	if err != nil {
 		return nil, err
 	}
 	db := databse.DB
 
 	if err := MigrateDatabase(db); err != nil {
+		_ = CloseDatabase(db)
 		return nil, err
 	}
 	return db, nil
