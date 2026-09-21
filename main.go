@@ -38,6 +38,9 @@ func main() {
 	r.HandleFunc("/links", func(w http.ResponseWriter, r *http.Request) {
 		CreateLink(w, r, db)
 	}).Methods(http.MethodPost)
+	r.HandleFunc("/links/{id}", func(w http.ResponseWriter, r *http.Request) {
+		UpdateLink(w, r, db)
+	}).Methods(http.MethodPatch)
 
 	r.HandleFunc("/logout", Logout).Methods(http.MethodPost)
 	r.HandleFunc("/greetme", func(w http.ResponseWriter, r *http.Request) {
