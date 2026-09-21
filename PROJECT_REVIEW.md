@@ -53,6 +53,51 @@ back without changing the public URL.
 5. PostgreSQL deployment, backup/restore, and migration rehearsal are not
    automated in this repository.
 
+## Issues to open
+
+### Issue: Production database connections disable TLS
+
+**Severity:** High
+
+`ConnectToDatabaseWithConfig` builds the PostgreSQL DSN with
+`sslmode=disable` (`db.go`). This means database credentials and application
+data are sent without transport encryption whenever the database is remote.
+The current configuration has no way to select an SSL mode, CA certificate, or
+client certificate, so deploying the service outside a trusted local network
+creates an avoidable credential and data-exposure risk.
+
+**Acceptance criteria:**
+
+- Production configuration defaults to TLS (at least `sslmode=require`).
+- The SSL mode and certificate options are configurable through documented
+  `ATOMICURL_*` settings.
+- Local development can still use an explicit, documented non-TLS setting.
+- Connection-string construction and startup validation have tests covering
+  both production and local-development configurations.
+
+### Completed: Refactor the flat root package into a maintainable folder structure
+
+**Severity:** Medium
+
+**Status:** Completed. The application now follows a `backend/` module layout
+with focused `internal/api`, `internal/config`, `internal/db`,
+`internal/models`, `internal/routes`, and `internal/utils` packages.
+
+Before this refactor, every production file and test lived in the repository
+root and used the single `main` package. The root mixed server startup,
+database access, authentication, HTTP handlers, legacy `/create` behavior,
+the versioned link API, models, and their tests.
+
+**Acceptance criteria:**
+
+- Keep the executable entry point in `backend/main.go` and route registration
+  in `backend/internal/routes`.
+- Keep API handlers, configuration, database, models, and utilities in their
+  focused `backend/internal` packages.
+- Keep legacy compatibility code isolated in the API package's `legacy.go`.
+- Keep package-specific tests beside the package they exercise.
+- Preserve the existing API behavior during future structural changes.
+
 ## Recommended next milestone
 
 Build and rehearse the explicit legacy-data migration in a copy of production
@@ -66,7 +111,8 @@ the legacy `Url` model and `/create` compatibility route be removed.
 The maintainer checks are:
 
 ```sh
-gofmt -w *.go
+cd backend
+gofmt -w $(find . -name '*.go')
 go test ./...
 go test -race ./...
 go vet ./...

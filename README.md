@@ -15,6 +15,9 @@ Requirements:
 - Go 1.24 or newer
 - PostgreSQL for the application database
 
+The Go module and executable are in `backend/`, following the same layout as
+the Disaster-Watcher project.
+
 Create a database, then export the preferred configuration variables:
 
 ```sh
@@ -26,8 +29,22 @@ export ATOMICURL_DB_NAME=atomicurl
 export ATOMICURL_SECRET_KEY='use-at-least-32-random-characters-here'
 export ATOMICURL_APP_ENV=development
 export ATOMICURL_HTTP_PORT=3000
+cd backend
 go run .
 ```
+
+To load safe, repeatable demo data in a non-production database, enable the
+opt-in seed before starting the app:
+
+```sh
+export ATOMICURL_SEED_DEMO=true
+cd backend
+go run .
+```
+
+Then log in with `demo` / `demo-password` and open `/dashboard`. The seed
+creates three links, click counts, one inactive link, and version history. It
+is refused when `ATOMICURL_APP_ENV=production`.
 
 The older names `HOST`, `PORT`, `USER`, `PASSWORD`, `DBNAME`, `SECRETKEY`, and
 `APP_ENV` are still accepted for compatibility. `ATOMICURL_HTTP_PORT` defaults
@@ -73,10 +90,16 @@ The public URL remains `GET /{code}` throughout the workflow. The authenticated
 counts, timestamps, and version counts. The legacy `POST /create` endpoint is
 still available for compatibility but is not the versioned link API.
 
+Open `GET /dashboard` in a browser after logging in for the simple HTML
+dashboard. It includes the same link information plus create, update, copy,
+and history controls. API clients continue to receive the dashboard response
+as JSON.
+
 ## Development checks
 
 ```sh
-gofmt -w *.go
+cd backend
+gofmt -w $(find . -name '*.go')
 go test ./...
 go test -race ./...
 go vet ./...
