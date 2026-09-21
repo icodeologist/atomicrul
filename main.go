@@ -41,6 +41,9 @@ func main() {
 	r.HandleFunc("/links/{id}", func(w http.ResponseWriter, r *http.Request) {
 		UpdateLink(w, r, db)
 	}).Methods(http.MethodPatch)
+	r.HandleFunc("/links/{id}/history", func(w http.ResponseWriter, r *http.Request) {
+		GetLinkHistory(w, r, db)
+	}).Methods(http.MethodGet)
 
 	r.HandleFunc("/logout", Logout).Methods(http.MethodPost)
 	r.HandleFunc("/greetme", func(w http.ResponseWriter, r *http.Request) {
