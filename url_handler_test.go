@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"gorm.io/driver/sqlite"
@@ -68,11 +67,9 @@ func TestHandleRedirectionOfShortUrlToLongUrl_Success(t *testing.T) {
 
 	// Insert a valid URL entry
 	url := Url{
-		URL:                  "https://google.com",
-		ShortID:              "abc123",
-		ShortLink:            "http://localhost:3000/abc123",
-		ExpirationTime:       time.Now().Add(5 * time.Minute),
-		ShortLinkCreatedTime: time.Now(),
+		URL:       "https://google.com",
+		ShortID:   "abc123",
+		ShortLink: "http://localhost:3000/abc123",
 	}
 	if err := db.Create(&url).Error; err != nil {
 		t.Fatalf("failed to insert test url: %v", err)
