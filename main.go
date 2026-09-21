@@ -66,8 +66,7 @@ func SetUpDb() (*gorm.DB, error) {
 	}
 	db := databse.DB
 
-	err = db.AutoMigrate(&Url{}, &User{}, &Link{}, &LinkVersion{})
-	if err != nil {
+	if err := MigrateDatabase(db); err != nil {
 		return nil, err
 	}
 	return db, nil

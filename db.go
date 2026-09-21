@@ -26,15 +26,22 @@ func ConnectToDatabase() (*Database, error) {
 	}
 	fmt.Println("Database connected successfully.")
 
-	db.AutoMigrate(Url{}, User{}, Link{}, LinkVersion{})
-
 	return &Database{
 		DB: db,
 	}, nil
 
 }
 
-// TODO: make this safer
-func (db Database) Migrate(v any) {
-	db.DB.AutoMigrate(v)
+func MigrateDatabase(db *gorm.DB) error {
+	if err := db.AutoMigrate(&Url{}, &User{}, &Link{}, &LinkVersion{}); err != nil {
+		return fmt.Errorf("database migration failed: %w", err)
+	}
+	return nil
+}
+
+func (db Database) Migrate(v any) error {
+	if err := db.DB.AutoMigrate(v); err != nil {
+		return fmt.Errorf("database migration failed: %w", err)
+	}
+	return nil
 }
