@@ -23,21 +23,12 @@ type rollbackLinkResponse struct {
 
 func RollbackLink(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	if r.Method != http.MethodPost {
-		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Method not allowed."})
+		writeAPIError(w, http.StatusMethodNotAllowed, "Method not allowed.")
 		return
 	}
 
-	session, ok := getSession(w, r)
+	userID, ok := requireAuthenticatedUser(w, r)
 	if !ok {
-		return
-	}
-	if session.Values["authenticated"] != true {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
-		return
-	}
-	userID, ok := sessionUserID(session.Values["userid"])
-	if !ok {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
 		return
 	}
 
@@ -45,41 +36,40 @@ func RollbackLink(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	linkID, linkErr := strconv.ParseUint(vars["id"], 10, 0)
 	versionID, versionErr := strconv.ParseUint(vars["versionID"], 10, 0)
 	if linkErr != nil || versionErr != nil || linkID == 0 || versionID == 0 {
-		writeJson(w, http.StatusNotFound, apiError{Err: "Link or version not found."})
+		writeAPIError(w, http.StatusNotFound, "Link or version not found.")
 		return
 	}
 
 	var request rollbackLinkRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
 	if err := decoder.Decode(&request); err != nil {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Request body must be valid JSON."})
+		writeAPIError(w, http.StatusBadRequest, "Request body must be valid JSON.")
 		return
 	}
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Request body must contain one JSON object."})
+		writeAPIError(w, http.StatusBadRequest, "Request body must contain one JSON object.")
 		return
 	}
 	note := strings.TrimSpace(request.Note)
 	if note == "" {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Note is required."})
+		writeAPIError(w, http.StatusBadRequest, "Note is required.")
 		return
 	}
 
 	var link Link
 	var version LinkVersion
 	err := db.Transaction(func(tx *gorm.DB) error {
-		var current Link
-		result := tx.Where("id = ? AND user_id = ?", uint(linkID), userID).First(&current)
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		current, findErr := findOwnedLink(tx, userID, uint(linkID))
+		if isLinkNotFound(findErr) {
 			return errLinkNotFound
 		}
-		if result.Error != nil {
-			return result.Error
+		if findErr != nil {
+			return findErr
 		}
 
 		var selected LinkVersion
-		result = tx.Where("id = ? AND link_id = ?", uint(versionID), current.ID).First(&selected)
+		result := tx.Where("id = ? AND link_id = ?", uint(versionID), current.ID).First(&selected)
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return errLinkNotFound
 		}
@@ -102,10 +92,10 @@ func RollbackLink(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	})
 	if err != nil {
 		if errors.Is(err, errLinkNotFound) {
-			writeJson(w, http.StatusNotFound, apiError{Err: "Link or version not found."})
+			writeAPIError(w, http.StatusNotFound, "Link or version not found.")
 			return
 		}
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not roll back link."})
+		writeAPIError(w, http.StatusInternalServerError, "Could not roll back link.")
 		return
 	}
 
