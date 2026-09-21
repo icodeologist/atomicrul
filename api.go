@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -79,31 +81,50 @@ func handleUserUrlsSumbmission(w http.ResponseWriter, r *http.Request, db *gorm.
 }
 
 func HandleRedirectionOfShortUrlToLongUrl(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
-	vars := mux.Vars(r)
-	code := vars["code"]
+	if r.Method != http.MethodGet {
+		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Method not allowed."})
+		return
+	}
+
+	code := strings.TrimSpace(mux.Vars(r)["code"])
 	if code == "" {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "code cannot be emtpy."})
+		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
 		return
 	}
+
+	var link Link
+	result := db.Where("code = ?", code).First(&link)
+	if result.Error == nil {
+		if !link.Active {
+			writeJson(w, http.StatusGone, apiError{Err: "This link is inactive."})
+			return
+		}
+		http.Redirect(w, r, link.Destination, http.StatusFound)
+		return
+	}
+	if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not look up link."})
+		return
+	}
+
+	// Legacy Url records remain available until the explicit data migration.
 	var url Url
-	result := db.Where("short_id=?", code).First(&url)
+	result = db.Where("short_id = ?", code).First(&url)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
+		return
+	}
 	if result.Error != nil {
-		writeJson(w, http.StatusBadRequest, apiError{Err: fmt.Sprintf("%v\n", result.Error.Error())})
+		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not look up link."})
 		return
 	}
 
-	// chekc if  the link is expired
 	if time.Now().After(url.ExpirationTime) {
-		// link has expired
-		writeJson(w, http.StatusNotAcceptable, apiError{Err: "Your link has expired."})
+		writeJson(w, http.StatusGone, apiError{Err: "Your link has expired."})
 		return
 	}
 
-	// update the clicks
-	db.Model(&url).Update("clicks", url.Clicks+1)
-	fmt.Println("url ->", url)
-
-	http.Redirect(w, r, url.URL, 302)
+	http.Redirect(w, r, url.URL, http.StatusFound)
 }
 
 func writeJson(w http.ResponseWriter, statusCode int, v any) {
