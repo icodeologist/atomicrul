@@ -57,9 +57,6 @@ func main() {
 		ShowUserDashBoard(w, r, db)
 	}).Methods(http.MethodGet)
 
-	r.HandleFunc("/remake_links", func(w http.ResponseWriter, r *http.Request) {
-		RemakeExpiredLinks(w, r, db)
-	}).Methods(http.MethodPost)
 	r.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
 		HandleRedirectionOfShortUrlToLongUrl(w, r, db)
 	}).Methods(http.MethodGet)

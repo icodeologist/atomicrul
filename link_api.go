@@ -23,14 +23,13 @@ const (
 var errDuplicateLinkCode = errors.New("link code already exists")
 
 var reservedLinkCodes = map[string]struct{}{
-	"register":     {},
-	"login":        {},
-	"links":        {},
-	"create":       {},
-	"logout":       {},
-	"greetme":      {},
-	"dashboard":    {},
-	"remake_links": {},
+	"register":  {},
+	"login":     {},
+	"links":     {},
+	"create":    {},
+	"logout":    {},
+	"greetme":   {},
+	"dashboard": {},
 }
 
 type createLinkRequest struct {
