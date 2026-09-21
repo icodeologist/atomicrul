@@ -12,6 +12,7 @@ type User struct {
 	Email     string `gorm:"uniqueIndex;not null;size:100"`
 	Password  string `gorm:"not null"`
 	Urls      []Url  `gorm:"foreignKey:UserID"`
+	Links     []Link `gorm:"foreignKey:UserID"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -29,4 +30,27 @@ type Url struct {
 	ExpirationTime       time.Time
 	UserID               uint
 	Clicks               int
+}
+
+type Link struct {
+	ID          uint   `gorm:"primaryKey;autoIncrement"`
+	Code        string `gorm:"uniqueIndex;not null"`
+	Title       string
+	Destination string        `gorm:"not null"`
+	Active      bool          `gorm:"not null;default:true"`
+	Clicks      int           `gorm:"not null;default:0"`
+	UserID      uint          `gorm:"index;not null"`
+	User        User          `gorm:"foreignKey:UserID"`
+	Versions    []LinkVersion `gorm:"foreignKey:LinkID"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type LinkVersion struct {
+	ID          uint   `gorm:"primaryKey;autoIncrement"`
+	LinkID      uint   `gorm:"index;not null"`
+	Link        Link   `gorm:"foreignKey:LinkID"`
+	Destination string `gorm:"not null"`
+	Note        string
+	CreatedAt   time.Time
 }

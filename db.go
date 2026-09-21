@@ -26,7 +26,7 @@ func ConnectToDatabase() (*Database, error) {
 	}
 	fmt.Println("Database connected successfully.")
 
-	db.AutoMigrate(Url{}, User{})
+	db.AutoMigrate(Url{}, User{}, Link{}, LinkVersion{})
 
 	return &Database{
 		DB: db,
