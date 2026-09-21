@@ -13,23 +13,36 @@ type Database struct {
 }
 
 func ConnectToDatabase() (*Database, error) {
-	host := os.Getenv("HOST")
-	port := os.Getenv("PORT")
-	user := os.Getenv("USER")
-	password := os.Getenv("PASSWORD")
-	dbname := os.Getenv("DBNAME")
-	dsn := fmt.Sprintf("host=%s port=%v user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+	config, err := LoadConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return ConnectToDatabaseWithConfig(config)
+}
+
+func ConnectToDatabaseWithConfig(config AppConfig) (*Database, error) {
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("Database connection error : %v\n", err)
+		return nil, fmt.Errorf("database connection failed: %w", err)
 	}
-	fmt.Println("Database connected successfully.")
 
 	return &Database{
 		DB: db,
 	}, nil
 
+}
+
+func CloseDatabase(db *gorm.DB) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("database handle unavailable: %w", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		return fmt.Errorf("database close failed: %w", err)
+	}
+	return nil
 }
 
 func MigrateDatabase(db *gorm.DB) error {
