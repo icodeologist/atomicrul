@@ -53,47 +53,37 @@ type linkResponse struct {
 
 func CreateLink(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	if r.Method != http.MethodPost {
-		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Method not allowed."})
+		writeAPIError(w, http.StatusMethodNotAllowed, "Method not allowed.")
 		return
 	}
 
-	session, ok := getSession(w, r)
+	userID, ok := requireAuthenticatedUser(w, r)
 	if !ok {
-		return
-	}
-	if session.Values["authenticated"] != true {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
-		return
-	}
-
-	userID, ok := sessionUserID(session.Values["userid"])
-	if !ok {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
 		return
 	}
 
 	var request createLinkRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
 	if err := decoder.Decode(&request); err != nil {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Request body must be valid JSON."})
+		writeAPIError(w, http.StatusBadRequest, "Request body must be valid JSON.")
 		return
 	}
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		writeJson(w, http.StatusBadRequest, apiError{Err: "Request body must contain one JSON object."})
+		writeAPIError(w, http.StatusBadRequest, "Request body must contain one JSON object.")
 		return
 	}
 
 	destination, err := ValidateAndNormalizeURL(request.Destination)
 	if err != nil {
-		writeJson(w, http.StatusBadRequest, apiError{Err: err.Error()})
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	customCode := strings.TrimSpace(request.Code)
 	if customCode != "" {
 		if err := validateLinkCode(customCode); err != nil {
-			writeJson(w, http.StatusBadRequest, apiError{Err: err.Error()})
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
@@ -150,10 +140,10 @@ func CreateLink(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	})
 	if err != nil {
 		if errors.Is(err, errDuplicateLinkCode) {
-			writeJson(w, http.StatusConflict, apiError{Err: "That link code is already in use."})
+			writeAPIError(w, http.StatusConflict, "That link code is already in use.")
 			return
 		}
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not create link."})
+		writeAPIError(w, http.StatusInternalServerError, "Could not create link.")
 		return
 	}
 
@@ -205,19 +195,4 @@ func isDuplicateCodeError(err error) bool {
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "duplicate key") && strings.Contains(message, "code") ||
 		strings.Contains(message, "unique constraint failed") && strings.Contains(message, "code")
-}
-
-func sessionUserID(value any) (uint, bool) {
-	switch id := value.(type) {
-	case uint:
-		return id, id != 0
-	case uint64:
-		return uint(id), id != 0 && uint64(uint(id)) == id
-	case int:
-		return uint(id), id > 0
-	case int64:
-		return uint(id), id > 0 && uint64(uint(id)) == uint64(id)
-	default:
-		return 0, false
-	}
 }
