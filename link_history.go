@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -25,45 +24,35 @@ type linkHistoryResponse struct {
 
 func GetLinkHistory(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	if r.Method != http.MethodGet {
-		writeJson(w, http.StatusMethodNotAllowed, apiError{Err: "Method not allowed."})
+		writeAPIError(w, http.StatusMethodNotAllowed, "Method not allowed.")
 		return
 	}
 
-	session, ok := getSession(w, r)
+	userID, ok := requireAuthenticatedUser(w, r)
 	if !ok {
-		return
-	}
-	if session.Values["authenticated"] != true {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
-		return
-	}
-	userID, ok := sessionUserID(session.Values["userid"])
-	if !ok {
-		writeJson(w, http.StatusUnauthorized, apiError{Err: "Please log in."})
 		return
 	}
 
 	id, err := strconv.ParseUint(mux.Vars(r)["id"], 10, 0)
 	if err != nil || id == 0 {
-		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
+		writeAPIError(w, http.StatusNotFound, "Link not found.")
 		return
 	}
 
-	var link Link
-	result := db.Select("id", "destination").Where("id = ? AND user_id = ?", uint(id), userID).First(&link)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		writeJson(w, http.StatusNotFound, apiError{Err: "Link not found."})
+	link, findErr := findOwnedLink(db, userID, uint(id))
+	if isLinkNotFound(findErr) {
+		writeAPIError(w, http.StatusNotFound, "Link not found.")
 		return
 	}
-	if result.Error != nil {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not load link history."})
+	if findErr != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Could not load link history.")
 		return
 	}
 
 	var versions []LinkVersion
-	result = db.Where("link_id = ?", link.ID).Order("created_at DESC, id DESC").Find(&versions)
+	result := db.Where("link_id = ?", link.ID).Order("created_at DESC, id DESC").Find(&versions)
 	if result.Error != nil {
-		writeJson(w, http.StatusInternalServerError, apiError{Err: "Could not load link history."})
+		writeAPIError(w, http.StatusInternalServerError, "Could not load link history.")
 		return
 	}
 
