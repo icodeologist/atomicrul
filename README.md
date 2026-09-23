@@ -50,50 +50,47 @@ The older names `HOST`, `PORT`, `USER`, `PASSWORD`, `DBNAME`, `SECRETKEY`, and
 `APP_ENV` are still accepted for compatibility. `ATOMICURL_HTTP_PORT` defaults
 to `3000`; `PORT` is treated as the database port when using legacy names.
 
-## API
+## CLI
 
-Register and log in to receive the session cookie:
-
-```sh
-curl -X POST http://localhost:3000/register \
-  -d 'username=denzil&email=denzil@example.com&password=correct-horse'
-
-curl -c cookies.txt -X POST http://localhost:3000/login \
-  -d 'username=denzil&password=correct-horse'
-```
-
-Create a permanent link:
+The recommended way to use AtomicURL from a terminal is the Go CLI in `cli/`.
+It handles authentication cookies locally and currently supports registration,
+login/logout, and permanent link creation:
 
 ```sh
-curl -b cookies.txt -X POST http://localhost:3000/links \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Portfolio API","destination":"https://example.com/demo","code":"portfolio-api"}'
+cd cli
+go run . register \
+  --username denzil \
+  --email denzil@example.com \
+  --password correct-horse
+
+go run . login --username denzil --password correct-horse
+go run . create \
+  --destination https://example.com/demo \
+  --title "Portfolio API" \
+  --code portfolio-api
 ```
 
-Update its destination, inspect history, and roll back a version:
+The server defaults to `http://localhost:3000`. Use `--base-url` or
+`ATOMICURL_URL` for another server. Use `ATOMICURL_PASSWORD` instead of the
+password flag when you do not want the password in shell history.
 
-```sh
-curl -b cookies.txt -X PATCH http://localhost:3000/links/1 \
-  -H 'Content-Type: application/json' \
-  -d '{"destination":"https://example.com/new-demo","note":"Moved the demo"}'
+## HTTP API
 
-curl -b cookies.txt http://localhost:3000/links/1/history
+The backend also exposes the HTTP API for other clients. Authenticated
+requests use the session cookie returned by `POST /login`:
 
-curl -b cookies.txt -X POST \
-  http://localhost:3000/links/1/versions/1/rollback \
-  -H 'Content-Type: application/json' \
-  -d '{"note":"Restored the working deployment"}'
-```
+- `POST /register` — create an account
+- `POST /login` and `POST /logout` — manage the session
+- `POST /links` — create a permanent link
+- `PATCH /links/{id}` — update a link destination
+- `GET /links/{id}/history` — inspect destination history
+- `POST /links/{id}/versions/{versionID}/rollback` — restore a version
+- `GET /dashboard` — list the authenticated user’s links
+- `GET /{code}` — redirect through a public short code
 
-The public URL remains `GET /{code}` throughout the workflow. The authenticated
-`GET /dashboard` endpoint returns owned links, current destinations, click
-counts, timestamps, and version counts. The legacy `POST /create` endpoint is
-still available for compatibility but is not the versioned link API.
-
-Open `GET /dashboard` in a browser after logging in for the simple HTML
-dashboard. It includes the same link information plus create, update, copy,
-and history controls. API clients continue to receive the dashboard response
-as JSON.
+The legacy `POST /create` endpoint remains available for compatibility but is
+not the versioned link API. Open `GET /dashboard` in a browser for the HTML
+dashboard; API clients receive the same dashboard data as JSON.
 
 ## Development checks
 
@@ -106,19 +103,3 @@ go vet ./...
 ```
 
 Tests use SQLite in memory and do not make external network requests.
-
-## CLI
-
-The initial Go CLI lives in `cli/` as a separate module. It supports account
-registration, cookie-based login/logout, and permanent link creation:
-
-```sh
-cd cli
-go run . help
-go run . login --username denzil --password correct-horse
-go run . create --destination https://example.com/demo --title "Demo link"
-```
-
-Use `--base-url` or `ATOMICURL_URL` when the API is not running at
-`http://localhost:3000`. The CLI stores the login session in its local config
-directory and reuses it for authenticated requests.
