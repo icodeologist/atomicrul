@@ -106,3 +106,19 @@ go vet ./...
 ```
 
 Tests use SQLite in memory and do not make external network requests.
+
+## CLI
+
+The initial Go CLI lives in `cli/` as a separate module. It supports account
+registration, cookie-based login/logout, and permanent link creation:
+
+```sh
+cd cli
+go run . help
+go run . login --username denzil --password correct-horse
+go run . create --destination https://example.com/demo --title "Demo link"
+```
+
+Use `--base-url` or `ATOMICURL_URL` when the API is not running at
+`http://localhost:3000`. The CLI stores the login session in its local config
+directory and reuses it for authenticated requests.
